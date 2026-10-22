@@ -1,11 +1,11 @@
-# Task 4 — CI/CD Review Notes
+# CI/CD Review Notes
 
-- Workflow: `.github/workflows/tests.yml`
-- Trigger events: push, pull request, manual workflow dispatch
-- Runner: GitHub-hosted Ubuntu
-- Python: 3.12
-- Test command: `python -m pytest -v --junitxml=test-results.xml`
-- Artifact: `pytest-results` (JUnit XML report)
-- External API credentials: not required for the mock OMS project
+- **Workflow:** `.github/workflows/tests.yml`
+- **Triggers:** push, pull request, and manual workflow dispatch
+- **Runner:** GitHub-hosted Ubuntu
+- **Python version:** 3.12
+- **Test command:** `python -m pytest -v --junitxml=test-results.xml`
+- **Artifact:** `pytest-results` (JUnit XML report)
+- **External credentials:** not required; the OMS runs locally as a mock service
 
-The workflow file is added to the project. A real GitHub Actions run can only be confirmed after this project is pushed to a GitHub repository and the workflow executes there.
+The workflow checks out the repository, installs the dependencies, runs the pytest suite, and uploads the test report. The workflow was verified in GitHub Actions, with all 14 tests passing in the successful run. The report is available as an artifact on that workflow run.
