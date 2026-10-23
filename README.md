@@ -1,29 +1,29 @@
 # OMS API Automation
 
-A Python test project for a mock Order Management System (OMS). The tests cover login, order creation, payment processing, and order-state validation. They also compare API responses with the records stored in SQLite.
+A Python test project for a mock Order Management System (OMS). The tests exercise login, order creation, payment simulation, order confirmation, and consistency between API responses and SQLite records.
 
-## Technology
+## Stack
 
 - Python 3.10+
-- Flask for the mock OMS API
-- Playwright `APIRequestContext` for HTTP requests
-- pytest for fixtures and assertions
-- SQLite for order and payment persistence
-- GitHub Actions for CI
+- Flask — mock OMS API
+- Playwright `APIRequestContext` — API requests
+- pytest — fixtures, test execution, and assertions
+- SQLite — order and payment persistence
+- GitHub Actions — CI test runs
 
-## Project structure
+## Project layout
 
 ```text
 oms-qa-automation/
-├── .github/
-│   └── workflows/
-│       └── tests.yml
+├── .github/workflows/tests.yml
 ├── docs/
+│   ├── AI_Testing_Thought_Process.md
 │   ├── CI_CD_Review_Notes.md
 │   └── Task_1_Test_Strategy_OMS.docx
 ├── src/
 │   ├── __init__.py
-│   └── app.py
+│   ├── app.py
+│   └── oms_api_client.py
 ├── tests/
 │   ├── conftest.py
 │   ├── test_auth.py
@@ -35,9 +35,9 @@ oms-qa-automation/
 └── README.md
 ```
 
-## Setup
+## Setup and run
 
-Create and activate a virtual environment from the repository root.
+Python 3.10 or newer is recommended. From the repository root, create and activate a virtual environment.
 
 **Windows PowerShell**
 
@@ -53,24 +53,26 @@ python -m venv .venv
 source .venv/bin/activate
 ```
 
-Install dependencies and run the tests:
+Install dependencies and run the suite:
 
 ```bash
 python -m pip install -r requirements.txt
 python -m pytest -v
 ```
 
-To run only the database checks:
+To run only database consistency checks:
 
 ```bash
 python -m pytest -v tests/test_database.py
 ```
 
-The tests use Playwright's API request context and do not launch a browser. The test fixture starts the Flask app locally and creates a temporary SQLite database for the test session.
+The tests use Playwright's API request context and do not launch a browser, so browser binaries are not required. The test fixture starts the Flask application on a local port and uses a temporary SQLite database for the test session.
 
-## API routes
+## API client and endpoints
 
-| Method | Route | Purpose |
+`src/oms_api_client.py` defines `OMSApiClient`, which wraps the request context and provides reusable methods for login, order creation, payment simulation, and order retrieval. The `oms_client` fixture in `tests/conftest.py` supplies this client to the tests, keeping endpoint details separate from scenario assertions.
+
+| Method | Endpoint | Purpose |
 |---|---|---|
 | `GET` | `/health` | Health check |
 | `POST` | `/api/login` | Authenticate the test user |
@@ -78,35 +80,32 @@ The tests use Playwright's API request context and do not launch a browser. The 
 | `POST` | `/api/orders/{id}/payment` | Simulate a payment outcome |
 | `GET` | `/api/orders/{id}` | Retrieve order and payment state |
 
-The mock app uses `qa.user@example.com` / `Passw0rd!` as test credentials. These credentials and the fixed bearer token are for local testing only and are not suitable for production authentication.
+The mock app uses `qa.user@example.com` / `Passw0rd!` as test credentials. They are only for this local test environment and are not production credentials.
 
 ## Test coverage
 
-- Valid login, invalid login, and order creation without authentication
-- Order response fields and total amount
-- Rejection of zero quantity and invalid prices
-- Successful payment and order confirmation
-- Failed payment and the resulting order status
-- Payment requests for unknown orders and invalid payment outcomes
-- Comparison of API order/payment data with SQLite records
-- Rejection of a second payment for an order
-
-The current suite contains 14 tests. Test data is isolated through a temporary database created for each pytest session.
+- Valid and invalid login; order creation without authentication
+- Order response fields and totals; invalid quantity and price
+- Successful and failed payment outcomes
+- Unknown order and invalid payment outcome
+- SQLite order and payment records compared with API responses
+- Payment amount and status consistency
+- Duplicate payment request rejected with only one payment record
 
 ## Database validation
 
-The API and database tests use the same temporary SQLite database. Tests create orders through the API, query SQLite directly, and compare stored values with the API responses. Currency values are compared with Python's `Decimal` to avoid floating-point rounding issues. The schema enforces a foreign key from payments to orders and allows only one payment record per order.
+The API and tests use the same temporary SQLite database during a test session. Tests create orders through the API, query SQLite directly, and compare stored product details, quantity, unit price, total, order status, and payment values with the API responses. Monetary values are compared using `Decimal` to avoid floating-point comparison errors. The schema also enforces a foreign key from payments to orders and one payment record per order.
 
-## Continuous integration
+## CI
 
-The workflow in `.github/workflows/tests.yml` runs on pushes, pull requests, and manual dispatch. It installs the dependencies, runs pytest, and uploads a JUnit XML test report as the `pytest-results` artifact.
-
-The workflow has been run in GitHub Actions, where all 14 tests passed. Subsequent runs can be checked from the repository's **Actions** tab.
+The workflow at `.github/workflows/tests.yml` runs on pushes, pull requests, and manual dispatch. It installs the dependencies, runs `python -m pytest -v --junitxml=test-results.xml`, and uploads the JUnit XML report as an artifact. The current repository has a successful GitHub Actions run with all 14 tests passing.
 
 ## Assumptions and limitations
 
-- The OMS is a local mock service because no existing application or API contract was provided.
-- Product details are included in the order request; there is no external product catalogue.
-- Payment outcomes are simulated. No payment provider or real transaction is involved.
+- A local mock OMS is used because no existing application or API contract was supplied.
+- Product details are provided in the order request; no external product catalogue is called.
+- Payment is simulated. No real payment provider or money movement is involved.
+- Authentication is intentionally simplified for this test project and is not production-grade.
 - The project tests API behavior and database persistence; it does not automate a browser UI.
-- Authentication is intentionally simplified for this test environment and is not production-ready.
+
+See `docs/Task_1_Test_Strategy_OMS.docx` for the test strategy and `docs/AI_Testing_Thought_Process.md` for the short AI testing responses.

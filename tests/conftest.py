@@ -8,6 +8,7 @@ from werkzeug.serving import make_server
 from playwright.sync_api import sync_playwright
 
 from src.app import create_app
+from src.oms_api_client import OMSApiClient
 
 
 @pytest.fixture(scope="session")
@@ -39,7 +40,7 @@ def oms_db_path(oms_environment):
 
 @pytest.fixture
 def api(oms_server):
-    """Playwright APIRequestContext; disposed after each test."""
+    """Low-level Playwright API context, retained for direct protocol checks."""
     with sync_playwright() as playwright:
         context = playwright.request.new_context(base_url=oms_server)
         yield context
@@ -47,11 +48,14 @@ def api(oms_server):
 
 
 @pytest.fixture
-def auth_headers(api):
-    response = api.post(
-        "/api/login",
-        data={"username": "qa.user@example.com", "password": "Passw0rd!"},
-    )
+def oms_client(api):
+    """Reusable OMS API abstraction built on Playwright's APIRequestContext."""
+    return OMSApiClient(api)
+
+
+@pytest.fixture
+def auth_headers(oms_client):
+    response = oms_client.login("qa.user@example.com", "Passw0rd!")
     assert response.status == 200, response.text()
     token = response.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}

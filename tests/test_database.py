@@ -1,20 +1,17 @@
-"""Task 3: verify the mock OMS API state against its actual SQLite database."""
+"""Verify the mock OMS API state against its actual SQLite database."""
 import sqlite3
 from decimal import Decimal
 
-from playwright.sync_api import APIRequestContext
+from src.oms_api_client import OMSApiClient
 
 
-def create_order(api: APIRequestContext, headers, quantity=2, unit_price=19.99) -> dict:
-    response = api.post(
-        "/api/orders",
-        headers=headers,
-        data={
-            "product_id": 101,
-            "product_name": "Wireless Mouse",
-            "quantity": quantity,
-            "unit_price": unit_price,
-        },
+def create_order(oms_client: OMSApiClient, headers, quantity=2, unit_price=19.99) -> dict:
+    response = oms_client.create_order(
+        headers,
+        product_id=101,
+        product_name="Wireless Mouse",
+        quantity=quantity,
+        unit_price=unit_price,
     )
     assert response.status == 201, response.text()
     return response.json()
@@ -36,8 +33,8 @@ def fetch_rows(db_path, order_id):
     return (dict(order) if order else None, dict(payment) if payment else None)
 
 
-def test_created_order_is_persisted_consistently(api, auth_headers, oms_db_path):
-    created = create_order(api, auth_headers)
+def test_created_order_is_persisted_consistently(oms_client, auth_headers, oms_db_path):
+    created = create_order(oms_client, auth_headers)
     stored_order, stored_payment = fetch_rows(oms_db_path, created["order_id"])
 
     assert stored_order is not None
@@ -51,15 +48,11 @@ def test_created_order_is_persisted_consistently(api, auth_headers, oms_db_path)
     assert stored_payment is None
 
 
-def test_successful_payment_matches_db_and_confirms_order(api, auth_headers, oms_db_path):
-    created = create_order(api, auth_headers, quantity=2, unit_price=19.99)
+def test_successful_payment_matches_db_and_confirms_order(oms_client, auth_headers, oms_db_path):
+    created = create_order(oms_client, auth_headers, quantity=2, unit_price=19.99)
     order_id = created["order_id"]
 
-    payment = api.post(
-        f"/api/orders/{order_id}/payment",
-        headers=auth_headers,
-        data={"outcome": "success"},
-    )
+    payment = oms_client.simulate_payment(order_id, auth_headers, outcome="success")
     assert payment.status == 200
     response_payment = payment.json()
     stored_order, stored_payment = fetch_rows(oms_db_path, order_id)
@@ -72,15 +65,11 @@ def test_successful_payment_matches_db_and_confirms_order(api, auth_headers, oms
     assert Decimal(stored_payment["amount"]) == Decimal("39.98")
 
 
-def test_failed_payment_state_matches_db(api, auth_headers, oms_db_path):
-    created = create_order(api, auth_headers, quantity=1, unit_price=29.50)
+def test_failed_payment_state_matches_db(oms_client, auth_headers, oms_db_path):
+    created = create_order(oms_client, auth_headers, quantity=1, unit_price=29.50)
     order_id = created["order_id"]
 
-    payment = api.post(
-        f"/api/orders/{order_id}/payment",
-        headers=auth_headers,
-        data={"outcome": "failure"},
-    )
+    payment = oms_client.simulate_payment(order_id, auth_headers, outcome="failure")
     assert payment.status == 200
     stored_order, stored_payment = fetch_rows(oms_db_path, order_id)
 
@@ -90,22 +79,14 @@ def test_failed_payment_state_matches_db(api, auth_headers, oms_db_path):
     assert stored_order["status"] != "CONFIRMED"
 
 
-def test_db_enforces_one_payment_per_order(api, auth_headers, oms_db_path):
-    created = create_order(api, auth_headers, quantity=1, unit_price=10.00)
+def test_db_enforces_one_payment_per_order(oms_client, auth_headers, oms_db_path):
+    created = create_order(oms_client, auth_headers, quantity=1, unit_price=10.00)
     order_id = created["order_id"]
-    payment = api.post(
-        f"/api/orders/{order_id}/payment",
-        headers=auth_headers,
-        data={"outcome": "success"},
-    )
+    payment = oms_client.simulate_payment(order_id, auth_headers, outcome="success")
     assert payment.status == 200
 
-    # A second payment request must be rejected by the API and must not create another row.
-    second = api.post(
-        f"/api/orders/{order_id}/payment",
-        headers=auth_headers,
-        data={"outcome": "success"},
-    )
+    # A second payment request must be rejected and must not create another row.
+    second = oms_client.simulate_payment(order_id, auth_headers, outcome="success")
     assert second.status == 409
     with sqlite3.connect(oms_db_path) as connection:
         count = connection.execute(
